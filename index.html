@@ -2,129 +2,121 @@
 <html lang="ar">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Eva Card</title>
-<script src="https://unpkg.com/qrious/dist/qrious.min.js"></script>
-
 <style>
-body {
-  font-family: Arial, sans-serif;
-  background:#f2f2f2;
-  text-align:center;
-}
-.box {
-  background:#fff;
-  padding:20px;
-  margin:20px auto;
-  width:90%;
-  max-width:500px;
-  border-radius:12px;
-}
-input, select {
-  width:100%;
-  padding:10px;
-  margin:6px 0;
-}
-button {
-  padding:10px;
-  width:45%;
-  margin:5px;
-}
-.qr {
-  margin:10px;
-  cursor:pointer;
-}
-.card {
-  background:#fff;
-  padding:15px;
-  margin:20px auto;
-  width:90%;
-  max-width:500px;
-  border-radius:10px;
-}
-.card button {
-  width:100%;
-  margin:5px 0;
-}
+body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
+.container { max-width: 600px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+input, select { width: 100%; padding: 10px; margin: 5px 0; border-radius: 5px; border: 1px solid #ccc; }
+button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+#barcodes img { margin: 5px; width: 150px; height: 150px; }
+.saved-card { background: #e0f7fa; padding: 15px; margin-top: 20px; border-radius: 10px; }
+.saved-card h3 { margin-top: 0; }
+.option-btn { display: inline-block; margin: 5px; padding: 5px 10px; background: #00796b; color: white; border-radius: 5px; cursor: pointer; text-decoration: none; }
 </style>
 </head>
-
 <body>
+<div class="container">
+  <h2>إنشاء باركود الدعوة</h2>
+  <label>اسم الدعوة:</label>
+  <input type="text" id="inviteName">
+  <label>عدد الضيوف:</label>
+  <input type="number" id="guestCount">
+  <label>رابط الصورة 1:</label>
+  <input type="text" id="img1">
+  <label>رابط الصورة 2:</label>
+  <input type="text" id="img2">
+  <label>لون الباركود:</label>
+  <input type="color" id="barcodeColor" value="#000000">
+  <label>عدد مرات مسح الباركود:</label>
+  <input type="number" id="scanCount" value="1">
+  <div>
+    <button onclick="createBarcodes()">إنشاء</button>
+    <button onclick="resetForm()">إلغاء</button>
+  </div>
 
-<div class="box">
-<h3>إنشاء بطاقة دعوة</h3>
+  <div id="barcodes"></div>
+  <button id="saveBtn" style="display:none;" onclick="saveInvitation()">حفظ</button>
 
-<input id="eventName" placeholder="اسم الدعوة">
-<input id="guestCount" type="number" placeholder="عدد الضيوف">
-<input id="img1" placeholder="رابط الصورة الأولى">
-<input id="img2" placeholder="رابط الصورة الثانية (اختياري)">
-<input type="color" id="color" value="#000000" title="اختر لون الباركود">
-<input id="scanLimit" type="number" placeholder="عدد مرات المسح (اختياري)">
-
-<div>
-<button onclick="generate()">إنشاء</button>
-<button onclick="clearAll()">إلغاء</button>
+  <div id="savedCardContainer"></div>
 </div>
-</div>
 
-<div id="qrs"></div>
-
-<button onclick="saveEvent()">💾 حفظ</button>
-
-<div id="card"></div>
-
+<script src="https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js"></script>
 <script>
-// لتخزين عدد المسح لكل ضيف
-let scans = {};
+let barcodesData = [];
 
-function generate(){
-  const count = parseInt(document.getElementById("guestCount").value);
-  const color = document.getElementById("color").value;
-  const img1 = document.getElementById("img1").value;
-  const img2 = document.getElementById("img2").value;
+function createBarcodes() {
+  const name = document.getElementById('inviteName').value;
+  const guests = parseInt(document.getElementById('guestCount').value);
+  const img1 = document.getElementById('img1').value;
+  const img2 = document.getElementById('img2').value;
+  const color = document.getElementById('barcodeColor').value;
+  const scanTimes = parseInt(document.getElementById('scanCount').value);
 
-  document.getElementById("qrs").innerHTML = "";
-  scans = {};
+  if(!name || !guests || !img1 || !img2) { alert("رجاءً املئي جميع الحقول!"); return; }
 
-  for(let i=1;i<=count;i++){
-    const canvas = document.createElement("canvas");
-    canvas.className="qr";
-    document.getElementById("qrs").appendChild(canvas);
+  const barcodesDiv = document.getElementById('barcodes');
+  barcodesDiv.innerHTML = "";
+  barcodesData = [];
 
-    new QRious({
-      element: canvas,
-      value: img1,
-      size: 130,
+  for(let i=1; i<=guests; i++){
+    const qr = new QRious({
+      value: img1, // نستخدم الصورة الأولى في الباركود
+      size: 150,
+      background: 'white',
       foreground: color
     });
-
-    // عند الضغط داخل الموقع → يفتح الرابط حسب المسح
-    canvas.addEventListener("click", ()=>{
-      if(!scans[i]) scans[i]=0;
-      scans[i]++;
-      const url = scans[i] === 1 ? img1 : (img2 || img1);
-      window.open(url, "_blank");
-    });
+    const img = document.createElement('img');
+    img.src = qr.toDataURL();
+    img.dataset.guestNumber = i;
+    img.dataset.scanTimes = scanTimes;
+    img.onclick = function(){
+      let count = parseInt(img.dataset.scanCount || 0);
+      if(count < scanTimes){
+        count++;
+        img.dataset.scanCount = count;
+        alert(`تم مسح باركود رقم ${count}`);
+      } else {
+        alert(`تم الوصول لأقصى عدد مسح ${scanTimes}`);
+      }
+    }
+    barcodesDiv.appendChild(img);
+    barcodesData.push({guest: i, qrImg: qr.toDataURL(), scanTimes});
   }
+
+  document.getElementById('saveBtn').style.display = "inline-block";
 }
 
-function clearAll(){
-  document.getElementById("qrs").innerHTML = "";
+function resetForm() {
+  document.getElementById('inviteName').value = "";
+  document.getElementById('guestCount').value = "";
+  document.getElementById('img1').value = "";
+  document.getElementById('img2').value = "";
+  document.getElementById('barcodeColor').value = "#000000";
+  document.getElementById('scanCount').value = "1";
+  document.getElementById('barcodes').innerHTML = "";
+  document.getElementById('saveBtn').style.display = "none";
 }
 
-function saveEvent(){
-  const name = document.getElementById("eventName").value;
-  document.getElementById("card").innerHTML = `
-  <div class="card">
-    <h3>${name}</h3>
-    <button>إدارة الأكواد</button>
-    <button>تحميل QR</button>
-    <button>تتبع المناسبة</button>
-    <button>إضافة ضيوف (عدد)</button>
-    <button>إضافة ضيوف (أسماء)</button>
-    <button>تأكيد / إلغاء ضيوف</button>
-  </div>`;
+function saveInvitation(){
+  const name = document.getElementById('inviteName').value;
+  const container = document.getElementById('savedCardContainer');
+  const card = document.createElement('div');
+  card.className = "saved-card";
+
+  let innerHTML = `<h3>${name}</h3>`;
+  innerHTML += `<a href="#" class="option-btn" onclick="alert('إدارة الأكواد')">إدارة الأكواد</a>`;
+  innerHTML += `<a href="#" class="option-btn" onclick="alert('تحميل QR')">تحميل QR</a>`;
+  innerHTML += `<a href="#" class="option-btn" onclick="alert('تتبع المناسبة')">تتبع مناسبة</a>`;
+  innerHTML += `<a href="#" class="option-btn" onclick="alert('إضافة ضيوف')">إضافة ضيوف</a>`;
+
+  card.innerHTML = innerHTML;
+  container.appendChild(card);
+
+  // مسح الباركود الحالي
+  document.getElementById('barcodes').innerHTML = "";
+  document.getElementById('saveBtn').style.display = "none";
 }
 </script>
-
 </body>
 </html>
