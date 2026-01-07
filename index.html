@@ -6,13 +6,15 @@
 <title>Eva Card</title>
 <style>
 body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
-.container { max-width: 600px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+.container { max-width: 700px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
 input, select { width: 100%; padding: 10px; margin: 5px 0; border-radius: 5px; border: 1px solid #ccc; }
 button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
-#barcodes img { margin: 5px; width: 150px; height: 150px; }
+#barcodes img { margin: 5px; width: 150px; height: 150px; cursor:pointer; }
 .saved-card { background: #e0f7fa; padding: 15px; margin-top: 20px; border-radius: 10px; }
 .saved-card h3 { margin-top: 0; }
 .option-btn { display: inline-block; margin: 5px; padding: 5px 10px; background: #00796b; color: white; border-radius: 5px; cursor: pointer; text-decoration: none; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
 </style>
 </head>
 <body>
@@ -44,6 +46,7 @@ button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; curs
 <script src="https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js"></script>
 <script>
 let barcodesData = [];
+let scanHistory = []; // لتتبع كل المسحات
 
 function createBarcodes() {
   const name = document.getElementById('inviteName').value;
@@ -61,7 +64,7 @@ function createBarcodes() {
 
   for(let i=1; i<=guests; i++){
     const qr = new QRious({
-      value: img1, // نستخدم الصورة الأولى في الباركود
+      value: img1,
       size: 150,
       background: 'white',
       foreground: color
@@ -70,14 +73,20 @@ function createBarcodes() {
     img.src = qr.toDataURL();
     img.dataset.guestNumber = i;
     img.dataset.scanTimes = scanTimes;
+    img.dataset.scanCount = 0;
     img.onclick = function(){
-      let count = parseInt(img.dataset.scanCount || 0);
+      let count = parseInt(img.dataset.scanCount);
       if(count < scanTimes){
         count++;
         img.dataset.scanCount = count;
-        alert(`تم مسح باركود رقم ${count}`);
+        scanHistory.push({
+          guest: img.dataset.guestNumber,
+          time: new Date().toLocaleString()
+        });
+        // فتح الصورة مباشرة عند أول مسح
+        window.open(img1, '_blank');
       } else {
-        alert(`تم الوصول لأقصى عدد مسح ${scanTimes}`);
+        alert(`تم مسح باركود مسبقًا (الحد ${scanTimes})`);
       }
     }
     barcodesDiv.appendChild(img);
@@ -96,6 +105,7 @@ function resetForm() {
   document.getElementById('scanCount').value = "1";
   document.getElementById('barcodes').innerHTML = "";
   document.getElementById('saveBtn').style.display = "none";
+  scanHistory = [];
 }
 
 function saveInvitation(){
@@ -103,12 +113,14 @@ function saveInvitation(){
   const container = document.getElementById('savedCardContainer');
   const card = document.createElement('div');
   card.className = "saved-card";
-  
+
   let innerHTML = `<h3>${name}</h3>`;
-  innerHTML += `<a href="#" class="option-btn" onclick="alert('إدارة الأكواد')">إدارة الأكواد</a>`;
-  innerHTML += `<a href="#" class="option-btn" onclick="alert('تحميل QR')">تحميل QR</a>`;
-  innerHTML += `<a href="#" class="option-btn" onclick="alert('تتبع المناسبة')">تتبع مناسبة</a>`;
-  innerHTML += `<a href="#" class="option-btn" onclick="alert('إضافة ضيوف')">إضافة ضيوف</a>`;
+  innerHTML += `<a href="#" class="option-btn" onclick="manageBarcodes()">إدارة الأكواد</a>`;
+  innerHTML += `<a href="#" class="option-btn" onclick="downloadQRs()">تحميل QR</a>`;
+  innerHTML += `<a href="#" class="option-btn" onclick="trackEvent()">تتبع المناسبة</a>`;
+  innerHTML += `<a href="#" class="option-btn" onclick="addGuests()">إضافة ضيوف</a>`;
+
+  innerHTML += `<div id="eventTable"></div>`; // جدول تتبع المسح
 
   card.innerHTML = innerHTML;
   container.appendChild(card);
@@ -116,6 +128,39 @@ function saveInvitation(){
   // مسح الباركود الحالي
   document.getElementById('barcodes').innerHTML = "";
   document.getElementById('saveBtn').style.display = "none";
+}
+
+// الوظائف الإضافية
+function manageBarcodes(){
+  alert("إدارة الأكواد: يمكنك رؤية الباركودات الحالية.");
+}
+
+function downloadQRs(){
+  barcodesData.forEach((b,i)=>{
+    const link = document.createElement('a');
+    link.href = b.qrImg;
+    link.download = `barcode_guest_${b.guest}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+}
+
+function trackEvent(){
+  if(scanHistory.length === 0){ alert("لا يوجد مسح حتى الآن"); return; }
+  let tableHTML = "<table><tr><th>رقم الباركود</th><th>التاريخ والوقت</th><th>تم المسح</th></tr>";
+  scanHistory.forEach(s=>{
+    tableHTML += `<tr><td>${s.guest}</td><td>${s.time}</td><td>✅</td></tr>`;
+  });
+  tableHTML += "</table>";
+  document.getElementById('eventTable').innerHTML = tableHTML;
+}
+
+function addGuests(){
+  let extra = parseInt(prompt("كم عدد الضيوف الإضافيين؟"));
+  if(isNaN(extra) || extra <= 0) return;
+  document.getElementById('guestCount').value = parseInt(document.getElementById('guestCount').value)+extra;
+  createBarcodes();
 }
 </script>
 </body>
