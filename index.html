@@ -5,165 +5,119 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Eva Card</title>
 <style>
-body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
-.container { max-width: 700px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-input, select { width: 100%; padding: 10px; margin: 5px 0; border-radius: 5px; border: 1px solid #ccc; }
-button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
-#barcodes img { margin: 5px; width: 150px; height: 150px; cursor:pointer; }
-.saved-card { background: #e0f7fa; padding: 15px; margin-top: 20px; border-radius: 10px; }
-.saved-card h3 { margin-top: 0; }
-.option-btn { display: inline-block; margin: 5px; padding: 5px 10px; background: #00796b; color: white; border-radius: 5px; cursor: pointer; text-decoration: none; }
-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
+body{font-family:Arial;background:#f2f2f2;padding:20px}
+.container{max-width:600px;margin:auto;background:#fff;padding:20px;border-radius:10px}
+input,button{width:100%;padding:10px;margin:6px 0}
+#codes img{width:130px;margin:5px;cursor:pointer}
 </style>
 </head>
 <body>
-<div class="container">
-  <h2>إنشاء باركود الدعوة</h2>
-  <label>اسم الدعوة:</label>
-  <input type="text" id="inviteName">
-  <label>عدد الضيوف:</label>
-  <input type="number" id="guestCount">
-  <label>رابط الصورة 1:</label>
-  <input type="text" id="img1">
-  <label>رابط الصورة 2:</label>
-  <input type="text" id="img2">
-  <label>لون الباركود:</label>
-  <input type="color" id="barcodeColor" value="#000000">
-  <label>عدد مرات مسح الباركود:</label>
-  <input type="number" id="scanCount" value="2">
-  <div>
-    
-    <button onclick="createBarcodes()">إنشاء</button>
-    <button onclick="resetForm()">إلغاء</button>
-  </div>
+<div class="container" id="main">
 
-  <div id="barcodes"></div>
-  <button id="saveBtn" style="display:none;" onclick="saveInvitation()">حفظ</button>
+<h2>إنشاء باركود</h2>
+<input id="name" placeholder="اسم الدعوة">
+<input id="count" type="number" placeholder="عدد الضيوف">
+<input id="img1" placeholder="رابط الصورة الأولى">
+<input id="img2" placeholder="رابط الصورة الثانية">
+<input id="maxScans" type="number" placeholder="عدد مرات مسح الباركود" value="2">
+<button onclick="generate()">إنشاء</button>
 
-  <div id="savedCardContainer"></div>
+<div id="codes"></div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js"></script>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
 <script>
-let barcodesData = [];
-let scanHistory = [];
+// ======= إعدادات Firebase =======
+var firebaseConfig = {
+  apiKey: "اكتبي هنا apiKey",
+  authDomain: "اكتبي هنا authDomain",
+  projectId: "اكتبي هنا projectId",
+  storageBucket: "اكتبي هنا storageBucket",
+  messagingSenderId: "اكتبي هنا messagingSenderId",
+  appId: "اكتبي هنا appId",
+  databaseURL: "اكتبي هنا databaseURL"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-function createBarcodes() {
-  const name = document.getElementById('inviteName').value;
-  const guests = parseInt(document.getElementById('guestCount').value);
-  const img1 = document.getElementById('img1').value;
-  const img2 = document.getElementById('img2').value;
-  const color = document.getElementById('barcodeColor').value;
-  const scanTimes = parseInt(document.getElementById('scanCount').value);
+// ======= قراءة الباركود عند المسح =======
+const params = new URLSearchParams(window.location.search);
+const id = params.get("id");
 
-  if(!name || !guests || !img1 || !img2) { alert("رجاءً املئي جميع الحقول!"); return; }
-
-  const barcodesDiv = document.getElementById('barcodes');
-  barcodesDiv.innerHTML = "";
-  barcodesData = [];
-
-  for(let i=1; i<=guests; i++){
-    const qr = new QRious({
-      value: img1,
-      size: 150,
-      background: 'white',
-      foreground: color
-    });
-    const img = document.createElement('img');
-    img.src = qr.toDataURL();
-    img.dataset.guestNumber = i;
-    img.dataset.scanTimes = scanTimes;
-    img.dataset.scanCount = 0;
-
-    img.onclick = function(){
-      let count = parseInt(img.dataset.scanCount);
-      if(count < scanTimes){
-        count++;
-        img.dataset.scanCount = count;
-        scanHistory.push({
-          guest: img.dataset.guestNumber,
-          time: new Date().toLocaleString()
-        });
-
-        // فتح الصور حسب عدد المسح
-        if(count === 1) window.open(img1,'_blank');
-        else if(count === 2) window.open(img2,'_blank');
+if(id){
+  db.collection("barcodes").doc(id).get().then((doc) => {
+    if(!doc.exists){
+      document.body.innerHTML = "<h2>باركود غير صالح</h2>";
+    } else {
+      const data = doc.data();
+      if(!data.active){
+        document.body.innerHTML = "<h2>الباركود غير مفعل</h2>";
+        return;
+      }
+      if(data.scans < data.maxScans){
+        const imgUrls = [data.img1, data.img2]; // ممكن توسعي لمزيد من الصور
+        const index = data.scans;
+        // تحديث عدد المسح
+        db.collection("barcodes").doc(id).update({ scans: data.scans + 1 });
+        location.href = imgUrls[index] || imgUrls[imgUrls.length-1];
       } else {
-        alert(`تم مسح باركود مسبقًا (الحد ${scanTimes})`);
+        document.body.innerHTML = "<h2>تم استخدام الباركود مسبقًا</h2>";
       }
     }
+  });
+}
 
-    barcodesDiv.appendChild(img);
-    barcodesData.push({guest: i, qrImg: qr.toDataURL(), scanTimes});
+// ======= إنشاء الباركود =======
+function generate(){
+  const nameVal = document.getElementById("name").value.trim();
+  const countVal = +document.getElementById("count").value;
+  const img1Val = document.getElementById("img1").value.trim();
+  const img2Val = document.getElementById("img2").value.trim();
+  const maxScansVal = +document.getElementById("maxScans").value;
+
+  if(!nameVal || !countVal || !img1Val || !img2Val){
+    alert("رجاءً املئي جميع الحقول!");
+    return;
   }
 
-  document.getElementById('saveBtn').style.display = "inline-block";
-}
+  const container = document.getElementById("codes");
+  container.innerHTML = "";
 
-function resetForm() {
-  document.getElementById('inviteName').value = "";
-  document.getElementById('guestCount').value = "";
-  document.getElementById('img1').value = "";
-  document.getElementById('img2').value = "";
-  document.getElementById('barcodeColor').value = "#000000";
-  document.getElementById('scanCount').value = "2";
-  document.getElementById('barcodes').innerHTML = "";
-  document.getElementById('saveBtn').style.display = "none";
-  scanHistory = [];
-}
+  for(let i=1;i<=countVal;i++){
+    const docId = Date.now()+""+i;
 
-function saveInvitation(){
-  const name = document.getElementById('inviteName').value;
-  const container = document.getElementById('savedCardContainer');
-  const card = document.createElement('div');
-  card.className = "saved-card";
+    db.collection("barcodes").doc(docId).set({
+      inviteName: nameVal,
+      guestNumber: i,
+      img1: img1Val,
+      img2: img2Val,
+      scans: 0,
+      maxScans: maxScansVal,
+      active: true
+    }).then(() => {
+      console.log(`باركود رقم ${i} محفوظ في Firebase`);
+    }).catch((error) => {
+      console.error("خطأ عند الحفظ: ", error);
+    });
 
-  let innerHTML = `<h3>${name}</h3>`;
-  innerHTML += `<a href="#" class="option-btn" onclick="manageBarcodes()">إدارة الأكواد</a>`;
-  innerHTML += `<a href="#" class="option-btn" onclick="downloadQRs()">تحميل QR</a>`;
-  innerHTML += `<a href="#" class="option-btn" onclick="trackEvent()">تتبع المناسبة</a>`;
-  innerHTML += `<a href="#" class="option-btn" onclick="addGuests()">إضافة ضيوف</a>`;
-  innerHTML += `<div id="eventTable"></div>`;
+    const qr = new QRious({
+      value: location.origin + location.pathname + "?id=" + docId,
+      size:130
+    });
 
-  card.innerHTML = innerHTML;
-  container.appendChild(card);
+    const img = document.createElement("img");
+    img.src = qr.toDataURL();
+    img.title = "اضغط لمسح الباركود";
+    container.appendChild(img);
+  }
 
-  document.getElementById('barcodes').innerHTML = "";
-  document.getElementById('saveBtn').style.display = "none";
-}
-
-// الوظائف الإضافية
-function manageBarcodes(){
-  alert("إدارة الأكواد: يمكنك رؤية الباركودات الحالية.");
-}
-
-function downloadQRs(){
-  barcodesData.forEach((b,i)=>{
-    const link = document.createElement('a');
-    link.href = b.qrImg;
-    link.download = `barcode_guest_${b.guest}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  });
-}
-
-function trackEvent(){
-  if(scanHistory.length === 0){ alert("لا يوجد مسح حتى الآن"); return; }
-  let tableHTML = "<table><tr><th>رقم الباركود</th><th>التاريخ والوقت</th><th>تم المسح</th></tr>";
-  scanHistory.forEach(s=>{
-    tableHTML += `<tr><td>${s.guest}</td><td>${s.time}</td><td>✅</td></tr>`;
-  });
-  tableHTML += "</table>";
-  document.getElementById('eventTable').innerHTML = tableHTML;
-}
-
-function addGuests(){
-  let extra = parseInt(prompt("كم عدد الضيوف الإضافيين؟"));
-  if(isNaN(extra) || extra <= 0) return;
-  document.getElementById('guestCount').value = parseInt(document.getElementById('guestCount').value)+extra;
-  createBarcodes();
+  alert("تم إنشاء الباركود وحفظه في Firebase بنجاح!");
 }
 </script>
 </body>
